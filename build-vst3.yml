@@ -1,0 +1,41 @@
+name: Build plugin
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build VST3
+        run: cmake --build build --config Release --target Jovian8_VST3 Sampler16_VST3 --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-VST3
+          path: build/*_artefacts/Release/VST3/
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -G Xcode
+      - name: Build AU + VST3
+        run: cmake --build build --config Release --target Jovian8_AU Jovian8_VST3 Sampler16_AU Sampler16_VST3 --parallel
+      - name: Signature ad hoc et archives
+        run: |
+          mkdir out
+          for f in build/*_artefacts/Release/AU/*.component build/*_artefacts/Release/VST3/*.vst3; do
+            codesign --force --deep --sign - "$f"
+            ditto -c -k --keepParent "$f" "out/$(basename "$f").zip"
+          done
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-AU-VST3
+          path: out/
